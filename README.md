@@ -1,9 +1,9 @@
 # misis2024s-21-02-suchoruchenkov-m-e
 
-# À‡·_1
+# lab1
 
-![À‡·_1](prj.lab\lab01\lab1.png)
+![lab1](prj.lab\lab01\lab1.png)
 
-# À‡·_2
+# lab2
 
-![À‡·_2](prj.lab\lab02\lab2.png)
+![lab2](prj.lab\lab02\lab2.png)
