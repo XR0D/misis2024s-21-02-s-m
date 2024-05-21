@@ -50,3 +50,8 @@
 
 ![2](prj.lab/lab03/2.png "lab03")
 
+# Îעקוע ןמ 9 ËÐ
+
+Âûגמה:
+
+![2](prj.lab/lab09/2.png "lab09")
