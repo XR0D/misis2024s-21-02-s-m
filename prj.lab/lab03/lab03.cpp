@@ -205,8 +205,8 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    float blackQuantile = 0.01;
-    float whiteQuantile = 0.01;
+    float blackQuantile = 0.3;
+    float whiteQuantile = 0.7;
 
     cv::Mat image = cv::imread(argv[1], cv::IMREAD_UNCHANGED);
 
