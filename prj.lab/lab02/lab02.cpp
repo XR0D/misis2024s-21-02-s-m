@@ -97,8 +97,10 @@ int main(int argc, char** argv) {
             y += 256;
         }
     }
+    cv::Mat resizedImage;
+    cv::resize(baseMat, resizedImage, cv::Size(baseMat.cols / 3, baseMat.rows / 3)); // Уменьшение
 
-    cv::imshow("Image", baseMat);
+    cv::imshow("Image", resizedImage);
     cv::waitKey(0);
     return 0;
 }
