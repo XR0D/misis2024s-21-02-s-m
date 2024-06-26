@@ -1,0 +1,1 @@
+26.06.24 - добавлены метрики: Intra-cluster Variance, Inter-cluster Distance. Добавлен эксперимент с документом. 

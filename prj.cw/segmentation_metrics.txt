@@ -1,0 +1,2 @@
+Intra-cluster Variance: 51.1755
+Inter-cluster Distance: 0

@@ -2,7 +2,8 @@
 #include <vector>
 #include <algorithm>
 #include <iostream>
-#include <random>
+#include <fstream>
+#include <sstream>
 
 class DocumentSegmentation {
 public:
@@ -106,18 +107,81 @@ public:
         return clusters;
     }
 
+    double calculateIntraClusterVariance(const cv::Mat& inputImage, const cv::Mat& segmentedImage) {
+        std::vector<std::vector<cv::Vec3b>> clusters(256);  // Предполагаем максимум 256 кластеров
+
+        for (int y = 0; y < segmentedImage.rows; ++y) {
+            for (int x = 0; x < segmentedImage.cols; ++x) {
+                cv::Vec3b color = segmentedImage.at<cv::Vec3b>(y, x);
+                int label = color[0];  // Используем первый канал как метку кластера
+                clusters[label].push_back(inputImage.at<cv::Vec3b>(y, x));
+            }
+        }
+
+        double totalVariance = 0.0;
+        int validClusters = 0;
+
+        for (const auto& cluster : clusters) {
+            if (cluster.empty()) continue;
+
+            cv::Scalar mean, stddev;
+            cv::meanStdDev(cluster, mean, stddev);
+            double variance = cv::sum(stddev)[0] / 3.0;  // Среднее по трем каналам
+            totalVariance += variance;
+            validClusters++;
+        }
+
+        return validClusters > 0 ? totalVariance / validClusters : 0.0;
+    }
+
+    double calculateInterClusterDistance(const cv::Mat& inputImage, const cv::Mat& hsvImage, const std::vector<int>& clusters) {
+        std::vector<cv::Scalar> clusterMeans(256, cv::Scalar(0, 0, 0));
+        std::vector<int> clusterCounts(256, 0);
+
+        for (int y = 0; y < inputImage.rows; ++y) {
+            for (int x = 0; x < inputImage.cols; ++x) {
+                cv::Vec3b color = inputImage.at<cv::Vec3b>(y, x);
+                cv::Vec3b hsvPixel = hsvImage.at<cv::Vec3b>(y, x);
+                int hue = static_cast<int>(hsvPixel[0] * 2);
+                int cluster = clusters[hue];
+                clusterMeans[cluster] += cv::Scalar(color);
+                clusterCounts[cluster]++;
+            }
+        }
+
+        std::vector<cv::Scalar> validMeans;
+        for (int i = 0; i < 256; ++i) {
+            if (clusterCounts[i] > 0) {
+                clusterMeans[i] /= clusterCounts[i];
+                validMeans.push_back(clusterMeans[i]);
+            }
+        }
+
+        double totalDistance = 0.0;
+        int comparisons = 0;
+        for (size_t i = 0; i < validMeans.size(); ++i) {
+            for (size_t j = i + 1; j < validMeans.size(); ++j) {
+                totalDistance += cv::norm(validMeans[i] - validMeans[j]);
+                comparisons++;
+            }
+        }
+
+        return comparisons > 0 ? totalDistance / comparisons : 0.0;
+    }
+
 private:
     cv::Mat applySegmentation(const cv::Mat& inputImage, const cv::Mat& hsvImage, const std::vector<int>& clusters) {
         cv::Mat segmented = cv::Mat::zeros(inputImage.size(), CV_8UC3);
-        std::vector<cv::Vec3b> clusterColors;
-
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(0, 255);
-
-        for (int i = 0; i < *std::max_element(clusters.begin(), clusters.end()) + 1; ++i) {
-            clusterColors.push_back(cv::Vec3b(dis(gen), dis(gen), dis(gen)));
-        }
+        std::vector<cv::Vec3b> clusterColors = {
+            cv::Vec3b(255, 0, 0),   // Красный
+            cv::Vec3b(0, 255, 0),   // Зеленый
+            cv::Vec3b(0, 0, 255),   // Синий
+            cv::Vec3b(255, 255, 0), // Желтый
+            cv::Vec3b(255, 0, 255), // Пурпурный
+            cv::Vec3b(0, 255, 255), // Голубой
+            cv::Vec3b(128, 128, 128), // Серый
+            // Добавьте больше цветов, если необходимо
+        };
 
         for (int y = 0; y < segmented.rows; ++y) {
             for (int x = 0; x < segmented.cols; ++x) {
@@ -125,7 +189,7 @@ private:
                 int hue = static_cast<int>(hsvPixel[0] * 2); // Convert back to [0, 360] range
                 int cluster = clusters[hue];
                 if (cluster != -1) {
-                    segmented.at<cv::Vec3b>(y, x) = clusterColors[cluster];
+                    segmented.at<cv::Vec3b>(y, x) = clusterColors[cluster % clusterColors.size()];
                 }
             }
         }
@@ -135,7 +199,7 @@ private:
 };
 
 int main() {
-    cv::Mat inputImage = cv::imread("C:/cv/misis2024s-21-02-suchoruchenkov-m-e/prj.cw/image9.png");
+    cv::Mat inputImage = cv::imread("../prj.cw/image8.jpg");
     if (inputImage.empty()) {
         std::cout << "Failed to load image" << std::endl;
         return -1;
@@ -144,7 +208,7 @@ int main() {
     DocumentSegmentation segmenter;
     cv::Mat segmentedImage = segmenter.segmentImage(inputImage);
 
-    // Visualize histogram
+    // Визуализация гистограммы
     cv::Mat hsvImage;
     cv::cvtColor(inputImage, hsvImage, cv::COLOR_BGR2HSV);
     std::vector<float> hueHistogram(360, 0);
@@ -152,17 +216,47 @@ int main() {
     std::vector<float> smoothedHistogram = segmenter.smoothHistogram(hueHistogram);
     cv::Mat histogramImage = segmenter.visualizeHistogram(smoothedHistogram);
 
-    // Get individual layers
+    // Получение отдельных слоев
     std::vector<int> peaks = segmenter.findPeaks(smoothedHistogram);
     std::vector<int> clusters = segmenter.clusterHues(smoothedHistogram, peaks);
     std::vector<cv::Mat> layers = segmenter.getSegmentedLayers(inputImage, hsvImage, clusters);
 
-    // Display results
+    // Расчет метрик
+    double intraClusterVariance = segmenter.calculateIntraClusterVariance(inputImage, segmentedImage);
+    double interClusterDistance = segmenter.calculateInterClusterDistance(inputImage, hsvImage, clusters);
+
+    // Запись метрик в файл
+    std::ofstream metricsFile("../prj.cw/segmentation_metrics.txt");
+    if (metricsFile.is_open()) {
+        metricsFile << "Intra-cluster Variance: " << intraClusterVariance << std::endl;
+        metricsFile << "Inter-cluster Distance: " << interClusterDistance << std::endl;
+        metricsFile.close();
+        std::cout << "Metrics have been written to segmentation_metrics.txt" << std::endl;
+    }
+    else {
+        std::cout << "Unable to open file for writing metrics" << std::endl;
+    }
+
+    // Чтение и отображение содержимого файла
+    std::ifstream readMetricsFile("../prj.cw/segmentation_metrics.txt");
+    if (readMetricsFile.is_open()) {
+        std::stringstream buffer;
+        buffer << readMetricsFile.rdbuf();
+        std::string fileContents = buffer.str();
+        std::cout << "Contents of segmentation_metrics.txt:" << std::endl;
+        std::cout << fileContents << std::endl;
+        readMetricsFile.close();
+    }
+    else {
+        std::cout << "Unable to open file for reading metrics" << std::endl;
+    }
+
+    // Отображение результатов
     cv::imshow("Original Image", inputImage);
     cv::imshow("Segmented Image", segmentedImage);
     cv::imshow("Hue Histogram", histogramImage);
 
-    // Display each layer
+    // Отображение каждого слоя
     for (size_t i = 0; i < layers.size(); ++i) {
         cv::imshow("Layer " + std::to_string(i), layers[i]);
     }
