@@ -2,41 +2,82 @@
 
 # Отчет по 4 ЛР
 
-# Методы детекции окружностей
+### Цель
 
-В лабораторной работы реализованы:
-1. Метод детекции с помощью анализа компоненты связности.
-2. Блоб детекция. Реализованы два фильтра - LoG и DoG
+Изучить и реализовать различные методы бинаризации изображений. Рассмотреть возможные варианты создания GUI для измененния параметров бинаризации, а также реализовать функционал для детектирования объектов изображения с возможностью оценки качества детектирования.
 
+### Ход работы
 
-## Описание логики методов детекции
-Понятно, вы описали два различных методических подхода для обнаружения и выделения объектов на изображении:
+В ходе выполнения четвертой лабораторной работы была написана программа, которая генерирует тестовое изображение с заданными параметрами и реализует несколько вариантов бинаризации. Также был предусмотрен режим визуальной настройки параметров бинаризации через GUI, реализован функционал для детектирования объектов на изображении и для оценки качества работы алгоритмов.
 
-1. **Метод локальной бинаризации и связанных компонент**:
-   - Предварительно бинаризуется изображение с использованием алгоритмов локальной бинаризации.
-   - С помощью функции `cv::connectedComponentsWithStats` находятся все связанные компоненты, их центры и площади.
-   - Производится фильтрация шума - удаляются области со слишком маленькой площадью.
+1. Изображение с параметрами генерации countCircles=10, minRadius=5, maxRadius=15, minContrast=50, maxContrast=255, blur=4, noise=4:
 
-2. **Метод пирамиды масштабов и LoG/DoG фильтрации**:
-   - Строится пирамида масштабов изображения.
-   - Для каждого уровня пирамиды и для каждого значения сигмы в заданном диапазоне применяется фильтр LoG (Лапласиан Гауссиана) или DoG (Разность Гауссианов).
-   - С помощью эрозии находятся точки с минимальным откликом фильтра.
-   - Для всех найденных точек и соответствующих им радиусов определяются пересечения, сохраняются только значения с минимальным откликом (центры и радиусы).
+![example](assets/example.png "example")
 
-## Результаты
+Пример работы GUI:
 
-### Пример применения LoG фильтра
+Бинаризация исходного изображения методом Бернсена:
 
-![1](../result/LoG.jpg?width="450")
+![bernsen](assets/bernsen.png "bernsen")
 
-### Пример применения DoG фильтра
+Детектирование при параметрах radius = 14, CMin = 40:
 
-![1](../result/DoG.jpg?width="450")
+![bernsenDetection](assets/bernsenDetection.png "bernsenDetection")
 
-### Пример примения эрозия для нахождения центров
+![bernsenkQuality](assets/bernsenQuality.png "bernsenQuality")
 
-![1](../result/con_brad_binary.jpg?width="450")
+Пример работы GUI:
 
-### Пример бинаризации Ниблека
+Бинаризация исходного изображения методом Ниблека:
 
-![1](../result/con_ni_binary.jpg?width="450")
+![niblack](assets/niblack.png "niblack")
+
+Детектирование при параметрах Radius = 24, k Value = 9, d Value = 18:
+
+![niblackDetection](assets/niblackDetection.png "niblackDetection")
+
+![niblackQuality](assets/niblackQuality.png "niblackQuality")
+
+2. Изображение с параметрами генерации countCircles=5, minRadius=5, maxRadius=15, minContrast=25, maxContrast=200, blur=3, noise=5:
+
+![example2](assets/example2.png "example2")
+
+Детектирование при параметрах radius = 14, CMin = 40, бинаризация Бернсена:
+
+![bernsenDetection2](assets/bernsenDetection2.png "bernsenDetection2")
+
+![bernsenkQuality2](assets/bernsenQuality2.png "bernsenQuality2")
+
+Детектирование при параметрах Radius = 8, k Value = 9, d Value = 7, бинаризация Ниблека:
+
+![niblackDetection2](assets/niblackDetection2.png "niblackDetection2")
+
+![niblackQuality2](assets/niblackQuality2.png "niblackQuality2")
+
+3. Изображение с параметрами генерации countCircles=7, minRadius=5, maxRadius=20, minContrast=40, maxContrast=180, blur=3, noise=7:
+
+![example3](assets/example3.png "example3")
+
+Детектирование при параметрах radius = 10, CMin = 30, бинаризация Бернсена:
+
+![bernsenDetection3](assets/bernsenDetection3.png "bernsenDetection3")
+
+![bernsenkQuality3](assets/bernsenQuality3.png "bernsenQuality3")
+
+Детектирование при параметрах Radius = 20, k Value = 9, d Value = 23, бинаризация Ниблека:
+
+![niblackDetection3](assets/niblackDetection3.png "niblackDetection3")
+
+![niblackQuality3](assets/niblackQuality3.png "niblackQuality3")
+
+### Работа консольного приложения
+
+Для запуска консольного приложения, нужно найти исполняемый файл в вашей директории и прописать в консоль:
+
+```.\lab04.exe <countCircles> <minRadius> <maxRadius> <minContrast> <maxContrast> <blur> <noise> <method("bernsen", "niblack", "detection")>```
+
+Также можно просто запустить исполняемый файл, подкоректировав параметры в самой программе.
+
+### Вывод
+
+Как можем заметить, объекты детектируются лучше, при бинаризации методом Ниблека.
