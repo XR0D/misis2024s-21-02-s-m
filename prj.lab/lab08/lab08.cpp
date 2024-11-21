@@ -4,6 +4,22 @@
 #include <string>
 #include <vector>
 
+// Функция для преобразования RGB в линейное RGB
+cv::Vec3f rgbToLinRGB(const cv::Vec3f& color) {
+    cv::Vec3f linColor;
+    for (int i = 0; i < 3; ++i) {
+        float c = color[i];
+        // Гамма-коррекция для стандартного RGB
+        if (c <= 0.04045f) {
+            linColor[i] = c / 12.92f;
+        }
+        else {
+            linColor[i] = pow((c + 0.055f) / 1.055f, 2.4f);
+        }
+    }
+    return linColor;
+}
+
 // Функция для нормализации вектора
 cv::Vec3f normalize(const cv::Vec3f& v) {
     return v / cv::norm(v, cv::NORM_L2);
@@ -19,14 +35,18 @@ std::vector<cv::Point2f> projectColors(const cv::Mat& src) {
 
     for (int i = 0; i < src.rows; ++i) {
         for (int j = 0; j < src.cols; ++j) {
+            // Извлекаем цвет пикселя
             const auto& color = src.at<cv::Vec3f>(i, j);
-            const float alpha = 1.5f / (color.dot(cv::Vec3f(1.0f, 1.0f, 1.0f)));
+            // Преобразуем в линейный RGB
+            const auto linColor = rgbToLinRGB(color);
+
+            const float alpha = 1.5f / (linColor.dot(cv::Vec3f(1.0f, 1.0f, 1.0f)));
             if (std::isinf(alpha)) {
                 continue;
             }
 
-            // Рассчитываем проекцию цвета на плоскость
-            const auto proj = alpha * color - cv::Vec3f(0.5f, 0.5f, 0.5f);
+            // Рассчитываем проекцию линейного цвета на плоскость
+            const auto proj = alpha * linColor - cv::Vec3f(0.5f, 0.5f, 0.5f);
             result.emplace_back(proj.dot(ox), proj.dot(oy));
         }
     }
@@ -59,6 +79,7 @@ int main(int argc, char* argv[]) {
     std::string input = "C:/Users/Леново/Source/Repos/misis2024s-21-02-suchoruchenkov-m-e/prj.lab/lab08/rgb1.png";
     std::string output = "C:/Users/Леново/Source/Repos/misis2024s-21-02-suchoruchenkov-m-e/prj.lab/lab08/result1.png";
     int size = 256;
+
     if (argc >= 4) {
         input = argv[1];
         output = argv[2];
@@ -66,13 +87,21 @@ int main(int argc, char* argv[]) {
     }
 
     cv::Mat img = cv::imread(input);
+    if (img.empty()) {
+        std::cerr << "Ошибка при загрузке изображения: " << input << std::endl;
+        return -1;
+    }
+
+    // Преобразуем изображение в формат CV_32FC3 (с плавающей точкой)
     img.convertTo(img, CV_32FC3, 1.0f / std::numeric_limits<uchar>::max());
 
     // Проекция цветов и получение результата
     const auto points = projectColors(img);
+
     // Получение изображения проекций
     cv::Mat result = getProj(points, size);
 
+    // Преобразование результата в 8-битное изображение
     result.convertTo(result, CV_8UC1, std::numeric_limits<uchar>::max());
 
     if (!cv::imwrite(output, result)) {
