@@ -108,11 +108,11 @@
 
 ![bernsenDetection2](prj.lab/lab04/assets/bernsenDetection2.png "bernsenDetection2")
 
-![bernsenkQuality2](assets/bernsenQuality2.png "bernsenQuality2")
+![bernsenkQuality2](prj.lab/lab04/assets/bernsenQuality2.png "bernsenQuality2")
 
 Детектирование при параметрах Radius = 8, k Value = 9, d Value = 7, бинаризация Ниблека:
 
-![niblackDetection2](assets/niblackDetection2.png "niblackDetection2")
+![niblackDetection2](prj.lab/lab04/assets/niblackDetection2.png "niblackDetection2")
 
 ![niblackQuality2](prj.lab/lab04/prj.lab/lab04/assets/niblackQuality2.png "niblackQuality2")
 
