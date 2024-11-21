@@ -108,13 +108,13 @@
 
 ![bernsenDetection2](prj.lab/lab04/assets/bernsenDetection2.png "bernsenDetection2")
 
-![bernsenkQuality2](prj.lab/lab04/assets/bernsenQuality2.png "bernsenQuality2")
+![bernsenkQuality2](assets/bernsenQuality2.png "bernsenQuality2")
 
 Детектирование при параметрах Radius = 8, k Value = 9, d Value = 7, бинаризация Ниблека:
 
 ![niblackDetection2](assets/niblackDetection2.png "niblackDetection2")
 
-![niblackQuality2](prj.lab/lab04/assets/niblackQuality2.png "niblackQuality2")
+![niblackQuality2](prj.lab/lab04/prj.lab/lab04/assets/niblackQuality2.png "niblackQuality2")
 
 3. Изображение с параметрами генерации countCircles=7, minRadius=5, maxRadius=20, minContrast=40, maxContrast=180, blur=3, noise=7:
 
@@ -130,7 +130,7 @@
 
 ![niblackDetection3](prj.lab/lab04/assets/niblackDetection3.png "niblackDetection3")
 
-![niblackQuality3](assets/niblackQuality3.png "niblackQuality3")
+![niblackQuality3](prj.lab/lab04/assets/niblackQuality3.png "niblackQuality3")
 
 ### Вывод
 

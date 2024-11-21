@@ -1,105 +1,92 @@
 #include <iostream>
 #include <string>
+#include <vector>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
+#include <limits>
+#include <algorithm>
 
-std::vector<cv::Vec3f> groundTruths;
+std::vector<cv::Vec3f> groundTruths; // Вектор для хранения истинных значений
 
-// Функция для оценки результатов обнаружения на основе эталонных данных
-void evaluateDetections(const std::vector<cv::Vec3f>& detections, const std::vector<cv::Vec3f>& groundTruths, double iouThreshold) {
-    int TP = 0, FP = 0, FN = 0;
-
-    for (const auto& truth : groundTruths) {
-        bool detected = false;
-        cv::Point truthCenter(cvRound(truth[0]), cvRound(truth[1]));
-        int truthRadius = cvRound(truth[2]);
-
-        for (const auto& detection : detections) {
-            cv::Point detectCenter(cvRound(detection[0]), cvRound(detection[1]));
-            int detectRadius = cvRound(detection[2]);
-
-            double distance = cv::norm(truthCenter - detectCenter);
-            double radiusSum = truthRadius + detectRadius;
-            // Упрощенное вычисление IoU: считается, что IoU = 1, если окружности пересекаются
-            double iou = (distance <= radiusSum) ? 1.0 : 0.0;
-
-            // Проверка, является ли обнаружение истинно положительным
-            if (iou >= iouThreshold) {
-                TP++;
-                detected = true;
-                break;
-            }
-        }
-        // Если ни одно обнаружение не соответствует текущему эталону, это ложное отрицание
-        if (!detected) FN++;
-    }
-
-    // Ложно положительные результаты — это обнаружения, не соответствующие ни одному эталону
-    FP = detections.size() - TP;
-
-    std::cout << "TP: " << TP << std::endl;
-    std::cout << "FP: " << FP << std::endl;
-    std::cout << "FN: " << FN << std::endl;
-}
-
-// Функция для применения бинаризации по Ниблэку к изображению
-cv::Mat niblackBinary(const cv::Mat& image, const int radius, const int k, const int d) {
+// Функция для бинаризации изображения методом Ниблака
+cv::Mat niblackBinary(const cv::Mat& image, const int radius, const double k, const int d) {
     cv::Mat binary;
 
     constexpr int max = static_cast<int>(std::numeric_limits<uchar>::max());
     cv::Mat kernel{ cv::Mat::zeros(2 * radius + 1, 2 * radius + 1, CV_32FC1) };
     cv::circle(kernel, cv::Point{ radius, radius }, radius, cv::Scalar{ 1.0f }, -1);
-    kernel /= cv::sum(kernel)[0];
+    kernel /= cv::sum(kernel)[0]; // Нормализация ядра
     cv::Mat tmp{ image.clone() };
     tmp.convertTo(tmp, CV_32FC1, 1.0 / max);
     cv::Mat mean{ tmp.clone() };
-    cv::filter2D(tmp, mean, -1, kernel);
+    cv::filter2D(tmp, mean, -1, kernel); // Среднее значение
     cv::multiply(tmp, tmp, tmp);
     cv::Mat meanSq{ tmp.clone() };
-    cv::filter2D(tmp, meanSq, -1, kernel);
+    cv::filter2D(tmp, meanSq, -1, kernel); // Среднее значение квадратов
     cv::multiply(mean, mean, tmp);
-    cv::sqrt(meanSq - tmp, tmp);
+    cv::sqrt(meanSq - tmp, tmp); // Стандартное отклонение
     image.convertTo(binary, CV_32FC1, 1.0 / max);
-    binary = binary > (mean + k * tmp + static_cast<double>(d) / max);
+    binary = binary > (mean + k * tmp + static_cast<double>(d) / max); // Бинаризация
     binary.convertTo(binary, CV_8UC1, max);
 
     return binary;
 }
 
-// Функция для применения бинаризации по Бернсену к изображению
-cv::Mat bernsenBinary(const cv::Mat& image, const int radius, const int cmin) {
-    cv::Mat binary;
+// Функция для оценки детекций
+void evaluateDetections(const std::vector<cv::Vec3f>& detections, const std::vector<cv::Vec3f>& groundTruths, double iouThreshold, int& TP, int& FP, int& FN) {
+    TP = 0; FP = 0; FN = 0;
 
-    constexpr int max = static_cast<int>(std::numeric_limits<uchar>::max());
-    cv::Mat kernel{ cv::Mat::zeros(2 * radius + 1, 2 * radius + 1, CV_8UC1) };
-    cv::circle(kernel, cv::Point{ radius, radius }, radius, cv::Scalar{ max }, -1);
-    cv::Mat iMin{ cv::Mat::zeros(image.rows, image.cols, CV_8UC1) };
-    cv::erode(image, iMin, kernel);
-    cv::Mat iMax{ cv::Mat::zeros(image.rows, image.cols, CV_8UC1) };
-    cv::dilate(image, iMax, kernel);
-    cv::Mat diff{ iMax - iMin };
-    cv::threshold(diff, diff, cmin, max, cv::THRESH_BINARY_INV);
-    binary = image > (diff | ((iMin + iMax) / 2));
+    std::vector<bool> matched(groundTruths.size(), false);
 
-    return binary;
+    for (const auto& detection : detections) {
+        cv::Point detectCenter(cvRound(detection[0]), cvRound(detection[1]));
+        int detectRadius = cvRound(detection[2]);
+
+        for (size_t i = 0; i < groundTruths.size(); ++i) {
+            const auto& truth = groundTruths[i];
+            cv::Point truthCenter(cvRound(truth[0]), cvRound(truth[1]));
+            int truthRadius = cvRound(truth[2]);
+
+            double distance = cv::norm(truthCenter - detectCenter);
+            double radiusSum = truthRadius + detectRadius;
+
+            // Вычисляем Intersection over Union (IoU)
+            double iou = (distance <= radiusSum) ? 1.0 : 0.0;
+
+            if (iou >= iouThreshold && !matched[i]) {
+                TP++;
+                matched[i] = true; // Отметить, что это истинное значение уже найдено
+                break; // Прерываем, когда находим соответствие для текущей детекции
+            }
+        }
+    }
+    FP = detections.size() - TP;
+    FN = groundTruths.size() - std::count(matched.begin(), matched.end(), true);
 }
 
-// Функция для добавления гауссовского шума к изображению
-cv::Mat add_gaussian_noise(const cv::Mat& image, const double std_dev) {
-    cv::Mat noisy_image;
-    cv::Mat noise(image.size(), CV_32FC1);
-    cv::randn(noise, 0, std_dev);
+// Функция для анализа FROC
+void frocAnalysis(const std::vector<cv::Vec3f>& detections, const std::vector<cv::Vec3f>& groundTruths, const std::vector<double>& thresholds) {
+    std::vector<int> TPCounts;
+    std::vector<int> FPCounts;
 
-    image.convertTo(noisy_image, CV_32FC1);
-    noisy_image += noise;
-    noisy_image.convertTo(noisy_image, CV_8UC1);
+    for (double threshold : thresholds) {
+        int TP, FP, FN;
+        evaluateDetections(detections, groundTruths, threshold, TP, FP, FN);
+        TPCounts.push_back(TP);
+        FPCounts.push_back(FP);
+    }
 
-    return noisy_image;
+    // Вывод результатов для FROC
+    std::cout << "FROC Analysis Results:" << std::endl;
+    std::cout << "Threshold\tTP\tFP" << std::endl;
+    for (size_t i = 0; i < thresholds.size(); ++i) {
+        std::cout << thresholds[i] << "\t" << TPCounts[i] << "\t" << FPCounts[i] << std::endl;
+    }
 }
 
 // Функция для генерации изображения с кругами
-cv::Mat generateImage(const int& countCircles, int minRadius, int maxRadius, int minContrast, int maxContrast, int blur) {
+cv::Mat generateImage(int countCircles, int minRadius, int maxRadius, int minContrast, int maxContrast, int blur) {
     int side_length = 4 * maxRadius * (countCircles - 1);
     cv::Mat image(side_length, side_length, CV_8UC1, cv::Scalar(0));
 
@@ -117,24 +104,51 @@ cv::Mat generateImage(const int& countCircles, int minRadius, int maxRadius, int
     }
 
     cv::GaussianBlur(image, image, cv::Size(blur * 2 + 1, blur * 2 + 1), 0);
-
-    cv::Mat result;
-    result = add_gaussian_noise(image, blur);
-
-    return result;
+    return image; // Возвращаем сгенерированное изображение
 }
 
-void onTrackbar(int, void*) {}
+// Функция для обработки и отображения изображений
+void processAndDisplay(const cv::Mat& image, int minRadius, int maxRadius) {
+    // Применяем метод Ниблака для бинаризации
+    cv::Mat binaryImage = niblackBinary(image, 24, 0.90, 18);
+
+    // Поиск кругов в бинарном изображении
+    std::vector<cv::Vec3f> circles;
+    cv::HoughCircles(binaryImage, circles, cv::HOUGH_GRADIENT, 1,
+        (binaryImage.rows - binaryImage.rows / 5) / (10 - 1),
+        100, 10,
+        minRadius, maxRadius);
+
+    // Рисуем найденные круги
+    cv::Mat detectedCirclesImage;
+    cv::cvtColor(image, detectedCirclesImage, cv::COLOR_GRAY2BGR);
+    for (size_t i = 0; i < circles.size(); i++) {
+        cv::Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
+        int radius = cvRound(circles[i][2]);
+
+        cv::circle(detectedCirclesImage, center, 3, cv::Scalar(0, 255, 0), -1, 1);
+        cv::circle(detectedCirclesImage, center, radius, cv::Scalar(0, 0, 255), 2, 1);
+    }
+
+    // Анализируем результаты FROC
+    std::vector<double> thresholds = { 0.1, 0.2, 0.3, 0.4, 0.5 }; // Примеры порогов IoU
+    frocAnalysis(circles, groundTruths, thresholds);
+
+    // Отображаем изображения
+    cv::imshow("Original Image", image);
+    cv::imshow("Binary Image", binaryImage);
+    cv::imshow("Detected Circles", detectedCirclesImage);
+    cv::waitKey(0);
+}
 
 int main(int argc, char* argv[]) {
-    // Параметры по умолчанию
+    // Значения по умолчанию
     int countCircles = 10;
     int minRadius = 5;
     int maxRadius = 15;
     int minContrast = 50;
     int maxContrast = 255;
     int blur = 4;
-    std::string method = "detection";
 
     if (argc >= 7) {
         countCircles = std::stoi(argv[1]);
@@ -143,92 +157,13 @@ int main(int argc, char* argv[]) {
         minContrast = std::stoi(argv[4]);
         maxContrast = std::stoi(argv[5]);
         blur = std::stoi(argv[6]);
-        method = argv[7];
     }
 
-    // Генерация изображения с окружностями
+    // Генерация изображения
     cv::Mat image = generateImage(countCircles, minRadius, maxRadius, minContrast, maxContrast, blur);
 
-    cv::Mat binaryImage;
+    // Обработка и отображение результатов
+    processAndDisplay(image, minRadius, maxRadius);
 
-    // Выбор метода бинаризации
-    if (method == "bernsen") {
-        int radius = 1;
-        int cmin = 0;
-
-        cv::namedWindow("Binary Image");
-        cv::createTrackbar("Radius", "Binary Image", &radius, 30, onTrackbar);
-        cv::setTrackbarMin("Radius", "Binary Image", radius);
-        cv::createTrackbar("CMin", "Binary Image", &cmin, 255, onTrackbar);
-        cv::setTrackbarMin("CMin", "Binary Image", cmin);
-        onTrackbar(0, 0);
-
-        while (true) {
-            binaryImage = bernsenBinary(image, radius, cmin);
-            imshow("Binary Image", binaryImage);
-
-            char key = cv::waitKey(10);
-            if (key == 27)
-                break;
-        }
-
-    }
-    else if (method == "niblack") {
-        int radius = 1;
-        int k = 0;
-        int d = 0;
-
-
-        cv::namedWindow("Binary Image");
-        cv::createTrackbar("Radius", "Binary Image", &radius, 30, onTrackbar);
-        cv::setTrackbarMin("Radius", "Binary Image", radius);
-        cv::createTrackbar("k Value", "Binary Image", &k, 255, onTrackbar);
-        cv::setTrackbarMin("k Value", "Binary Image", k);
-        cv::createTrackbar("d Value", "Binary Image", &d, 255, onTrackbar);
-        cv::setTrackbarMin("d Value", "Binary Image", d);
-        onTrackbar(0, 0);
-
-        while (true) {
-            k = static_cast<double>(cv::getTrackbarPos("k Value", "Binary Image")) / 10.0;
-            binaryImage = niblackBinary(image, radius, k, d);
-            imshow("Binary Image", binaryImage);
-
-            char key = cv::waitKey(10);
-            if (key == 27)
-                break;
-        }
-    }
-    else if (method == "detection") {
-        binaryImage = niblackBinary(image, 24, 0.90, 18);
-
-        std::vector<cv::Vec3f> circles;
-        cv::HoughCircles(binaryImage, circles, cv::HOUGH_GRADIENT, 1,
-            (binaryImage.rows - binaryImage.rows / 5) / (countCircles - 1),
-            100, 10,
-            minRadius, maxRadius);
-
-        cv::Mat detected_circles_image;
-        cv::cvtColor(image, detected_circles_image, cv::COLOR_GRAY2BGR);
-        for (size_t i = 0; i < circles.size(); i++) {
-            cv::Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
-            int radius = cvRound(circles[i][2]);
-
-            cv::circle(detected_circles_image, center, 3, cv::Scalar(0, 255, 0), -1, 1);
-
-            cv::circle(detected_circles_image, center, radius, cv::Scalar(0, 0, 255), 2, 1);
-        }
-
-        // Порог IoU для определения, считается ли обнаружение истинно положительным
-        double iouThreshold = 0.5;
-
-
-        evaluateDetections(circles, groundTruths, iouThreshold);
-
-        cv::imshow("Original Image", image);
-        cv::imshow("Binary Image", binaryImage);
-        cv::imshow("Detected Circles", detected_circles_image);
-
-        // Ожидание нажатия любой клавиши для выхода из программы
-        cv::waitKey(0);
-    }
+    return 0;
 }
